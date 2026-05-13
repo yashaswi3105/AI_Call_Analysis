@@ -1,7 +1,7 @@
 streamlit
 openai-whisper
-groq
-transformers
 torch
-torchaudio
-torchvision
+transformers
+groq
+ffmpeg-python
+sentencepiece
