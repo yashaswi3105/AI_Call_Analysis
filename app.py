@@ -1,10 +1,8 @@
 import streamlit as st
-import whisper
 import tempfile
 import os
 
 from groq import Groq
-from transformers import pipeline
 
 # -----------------------------
 # PAGE CONFIG
@@ -18,43 +16,17 @@ st.set_page_config(
 
 st.title("📞 AI Fraud Call Detection System")
 
-st.markdown(
-    """
-    Upload a phone call recording and let AI detect:
-    - Fraud / Scam calls
-    - Spam calls
-    - Genuine conversations
-    - Emotional tone
-    """
+st.write(
+    "Upload a call recording to detect fraud, scams, spam, and emotional tone."
 )
 
 # -----------------------------
 # GROQ API
 # -----------------------------
 
-api_key = st.secrets["GROQ_API_KEY"]
-
-client = Groq(api_key=api_key)
-
-# -----------------------------
-# LOAD MODELS
-# -----------------------------
-
-@st.cache_resource
-def load_models():
-
-    # Better Hindi + English understanding
-    whisper_model = whisper.load_model("medium")
-
-    emotion_model = pipeline(
-        "text-classification",
-        model="bhadresh-savani/distilbert-base-uncased-emotion"
-    )
-
-    return whisper_model, emotion_model
-
-
-model, emotion_classifier = load_models()
+client = Groq(
+    api_key=st.secrets["GROQ_API_KEY"]
+)
 
 # -----------------------------
 # FILE UPLOAD
@@ -71,7 +43,9 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file is not None:
 
-    # SAFER TEMP FILE FOR STREAMLIT CLOUD
+    st.audio(uploaded_file)
+
+    # Save temporary audio
     with tempfile.NamedTemporaryFile(
         delete=False,
         suffix=".wav"
@@ -83,113 +57,107 @@ if uploaded_file is not None:
 
     st.success("✅ Audio Uploaded Successfully!")
 
-    # Audio Player
-    st.audio(uploaded_file)
+    try:
 
-    with st.spinner("🔍 Analyzing Call..."):
-
-        try:
+        with st.spinner("🔍 Transcribing Audio..."):
 
             # -----------------------------
-            # TRANSCRIPTION
+            # AUDIO TRANSCRIPTION USING GROQ
             # -----------------------------
 
-            result = model.transcribe(
-                temp_audio,
-                language=None,
-                task="transcribe",
-                fp16=False,
-                temperature=0.2,
-                best_of=5
-            )
+            with open(temp_audio, "rb") as audio_file:
 
-            transcript_text = result["text"]
+                transcription = client.audio.transcriptions.create(
+                    file=audio_file,
+                    model="whisper-large-v3",
+                    response_format="verbose_json"
+                )
 
-            detected_language = result["language"]
+            transcript_text = transcription.text
 
-            # -----------------------------
-            # DETECTED LANGUAGE
-            # -----------------------------
+        # -----------------------------
+        # LANGUAGE DETECTION
+        # -----------------------------
 
-            st.subheader("🌐 Detected Language")
+        detected_language = getattr(
+            transcription,
+            "language",
+            "unknown"
+        )
 
-            st.write(detected_language.upper())
+        st.subheader("🌐 Detected Language")
 
-            # -----------------------------
-            # SPEAKER FORMATTING
-            # -----------------------------
+        st.write(detected_language.upper())
 
-            segments = result["segments"]
+        # -----------------------------
+        # SPEAKER FORMATTING
+        # -----------------------------
 
-            formatted_transcript = ""
+        sentences = transcript_text.split(".")
 
-            speaker = 1
+        formatted_transcript = ""
 
-            for segment in segments:
+        speaker = 1
 
-                text = segment["text"].strip()
+        for sentence in sentences:
 
-                if text:
+            sentence = sentence.strip()
 
-                    formatted_transcript += (
-                        f"Speaker {speaker}: {text}\n"
-                    )
+            if sentence:
 
-                    # Alternate speakers
-                    speaker = 2 if speaker == 1 else 1
+                formatted_transcript += (
+                    f"Speaker {speaker}: {sentence}\n"
+                )
 
-            # -----------------------------
-            # TRANSCRIPT DISPLAY
-            # -----------------------------
+                speaker = 2 if speaker == 1 else 1
 
-            st.subheader("📄 Transcript")
+        # -----------------------------
+        # TRANSCRIPT
+        # -----------------------------
 
-            st.text_area(
-                "Conversation Transcript",
-                formatted_transcript,
-                height=400
-            )
+        st.subheader("📄 Transcript")
 
-            # -----------------------------
-            # AI FRAUD ANALYSIS
-            # -----------------------------
+        st.text_area(
+            "Conversation Transcript",
+            formatted_transcript,
+            height=350
+        )
+
+        # -----------------------------
+        # FRAUD ANALYSIS
+        # -----------------------------
+
+        with st.spinner("🧠 Detecting Fraud..."):
 
             prompt = f"""
-You are an AI fraud detection expert.
+You are an advanced fraud detection AI.
 
-Analyze this Hindi-English phone conversation carefully.
+Analyze this Hindi-English phone conversation.
 
-Tasks:
+Detect:
+1. Fraud / Scam / Genuine
+2. Scam indicators
+3. Fraud confidence score
+4. Risk level
+5. Short summary
 
-1. Detect whether the call is:
-   - Fraud / Scam
-   - Spam
-   - Genuine
-
-2. Explain WHY.
-
-3. Detect scam indicators such as:
-   - OTP requests
-   - Bank fraud
-   - UPI scams
-   - Threats
-   - Urgency
-   - Prize scams
-   - Fake customer support
-   - Identity theft
-   - Financial manipulation
-
-4. Give:
-   - Fraud confidence score (0-100)
-   - Short summary
-   - Risk level (Low / Medium / High)
+Look for:
+- OTP scams
+- UPI fraud
+- Banking fraud
+- Fake customer care
+- Threats
+- Urgency
+- Money requests
+- Prize scams
+- Identity theft
 
 Conversation:
 {formatted_transcript}
 """
 
             response = client.chat.completions.create(
-                model="llama-3.1-8b-instant",
+                model="llama-3.3-70b-versatile",
                 messages=[
                     {
                         "role": "user",
@@ -198,76 +166,89 @@ Conversation:
                 ]
             )
 
-            ai_analysis = response.choices[0].message.content
-
-            # -----------------------------
-            # DISPLAY AI ANALYSIS
-            # -----------------------------
-
-            st.subheader("📊 AI Fraud Analysis")
-
-            st.write(ai_analysis)
-
-            # -----------------------------
-            # FRAUD DETECTION
-            # -----------------------------
-
-            if (
-                "fraud" in ai_analysis.lower()
-                or "scam" in ai_analysis.lower()
-                or "spam" in ai_analysis.lower()
-            ):
-
-                st.error("⚠ Potential Fraud / Scam Call Detected")
-
-                risk_score = 85
-
-            else:
-
-                st.success("✅ Genuine Conversation Detected")
-
-                risk_score = 20
-
-            # -----------------------------
-            # RISK METER
-            # -----------------------------
-
-            st.subheader("🚨 Risk Meter")
-
-            st.progress(risk_score)
-
-            st.write(f"Risk Score: {risk_score}/100")
-
-            # -----------------------------
-            # EMOTION DETECTION
-            # -----------------------------
-
-            emotion_result = emotion_classifier(
-                transcript_text[:1000]
+            ai_analysis = (
+                response.choices[0]
+                .message.content
             )
 
-            emotion = emotion_result[0]["label"]
+        # -----------------------------
+        # SHOW ANALYSIS
+        # -----------------------------
 
-            confidence = emotion_result[0]["score"]
+        st.subheader("📊 AI Fraud Analysis")
 
-            # -----------------------------
-            # DISPLAY EMOTION
-            # -----------------------------
+        st.write(ai_analysis)
 
-            st.subheader("😊 Emotion Detection")
+        # -----------------------------
+        # RISK DETECTION
+        # -----------------------------
 
-            st.write(f"Emotion: {emotion}")
+        analysis_lower = ai_analysis.lower()
 
-            st.write(
-                f"Confidence: {round(confidence, 2)}"
+        if (
+            "fraud" in analysis_lower
+            or "scam" in analysis_lower
+            or "spam" in analysis_lower
+        ):
+
+            risk_score = 85
+
+            st.error(
+                "⚠ Potential Fraud / Scam Call Detected"
             )
 
-            # -----------------------------
-            # DOWNLOAD REPORT
-            # -----------------------------
+        else:
 
-            report = f"""
-========== DETECTED LANGUAGE ==========
+            risk_score = 20
+
+            st.success(
+                "✅ Genuine Conversation Detected"
+            )
+
+        # -----------------------------
+        # RISK BAR
+        # -----------------------------
+
+        st.subheader("🚨 Risk Meter")
+
+        st.progress(risk_score)
+
+        st.write(f"Risk Score: {risk_score}/100")
+
+        # -----------------------------
+        # SIMPLE EMOTION DETECTION
+        # -----------------------------
+
+        emotion = "Neutral"
+
+        if (
+            "angry" in analysis_lower
+            or "threat" in analysis_lower
+        ):
+            emotion = "Angry"
+
+        elif (
+            "fear" in analysis_lower
+            or "panic" in analysis_lower
+        ):
+            emotion = "Fear"
+
+        elif (
+            "happy" in analysis_lower
+            or "excited" in analysis_lower
+        ):
+            emotion = "Happy"
+
+        st.subheader("😊 Emotion Detection")
+
+        st.write(f"Detected Emotion: {emotion}")
+
+        # -----------------------------
+        # REPORT DOWNLOAD
+        # -----------------------------
+
+        report = f"""
+========== LANGUAGE ==========
 
 {detected_language}
 
@@ -279,30 +260,27 @@ Conversation:
 
 {ai_analysis}
 
-========== EMOTION DETECTION ==========
+========== EMOTION ==========
 
-Emotion: {emotion}
-
-Confidence: {round(confidence, 2)}
+{emotion}
 
 ========== RISK SCORE ==========
 
 {risk_score}/100
 """
 
-            st.download_button(
-                label="⬇ Download Full Report",
-                data=report,
-                file_name="call_analysis_report.txt",
-                mime="text/plain"
-            )
+        st.download_button(
+            label="⬇ Download Report",
+            data=report,
+            file_name="fraud_analysis_report.txt",
+            mime="text/plain"
+        )
 
-        except Exception as e:
+    except Exception as e:
 
-            st.error(f"Error: {str(e)}")
+        st.error(f"Error: {str(e)}")
 
-        finally:
+    finally:
 
-            # CLEANUP TEMP FILE
-            if os.path.exists(temp_audio):
-                os.remove(temp_audio)
+        if os.path.exists(temp_audio):
+            os.remove(temp_audio)
