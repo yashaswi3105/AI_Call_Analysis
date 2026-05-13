@@ -1,11 +1,14 @@
 import streamlit as st
 import whisper
+import tempfile
+import os
+
 from groq import Groq
 from transformers import pipeline
 
-# -----------------------------------
+# -----------------------------
 # PAGE CONFIG
-# -----------------------------------
+# -----------------------------
 
 st.set_page_config(
     page_title="AI Fraud Call Detector",
@@ -15,22 +18,32 @@ st.set_page_config(
 
 st.title("📞 AI Fraud Call Detection System")
 
-# -----------------------------------
+st.markdown(
+    """
+    Upload a phone call recording and let AI detect:
+    - Fraud / Scam calls
+    - Spam calls
+    - Genuine conversations
+    - Emotional tone
+    """
+)
+
+# -----------------------------
 # GROQ API
-# -----------------------------------
+# -----------------------------
 
 api_key = st.secrets["GROQ_API_KEY"]
 
 client = Groq(api_key=api_key)
 
-# -----------------------------------
+# -----------------------------
 # LOAD MODELS
-# -----------------------------------
+# -----------------------------
 
 @st.cache_resource
 def load_models():
 
-    # Better Hindi + English support
+    # Better Hindi + English understanding
     whisper_model = whisper.load_model("medium")
 
     emotion_model = pipeline(
@@ -40,105 +53,114 @@ def load_models():
 
     return whisper_model, emotion_model
 
+
 model, emotion_classifier = load_models()
 
-# -----------------------------------
+# -----------------------------
 # FILE UPLOAD
-# -----------------------------------
+# -----------------------------
 
 uploaded_file = st.file_uploader(
     "📂 Upload Audio File",
     type=["wav", "mp3", "m4a"]
 )
 
-# -----------------------------------
+# -----------------------------
 # PROCESS AUDIO
-# -----------------------------------
+# -----------------------------
 
 if uploaded_file is not None:
 
-    temp_audio = "temp_audio.wav"
+    # SAFER TEMP FILE FOR STREAMLIT CLOUD
+    with tempfile.NamedTemporaryFile(
+        delete=False,
+        suffix=".wav"
+    ) as tmp_file:
 
-    with open(temp_audio, "wb") as f:
-        f.write(uploaded_file.getbuffer())
+        tmp_file.write(uploaded_file.read())
+
+        temp_audio = tmp_file.name
 
     st.success("✅ Audio Uploaded Successfully!")
 
-    # Audio player
+    # Audio Player
     st.audio(uploaded_file)
 
     with st.spinner("🔍 Analyzing Call..."):
 
-        # -----------------------------------
-        # TRANSCRIPTION
-        # -----------------------------------
+        try:
 
-        result = model.transcribe(
-            temp_audio,
-            language=None,
-            task="transcribe",
-            fp16=False,
-            temperature=0.2,
-            best_of=5
-        )
+            # -----------------------------
+            # TRANSCRIPTION
+            # -----------------------------
 
-        transcript_text = result["text"]
+            result = model.transcribe(
+                temp_audio,
+                language=None,
+                task="transcribe",
+                fp16=False,
+                temperature=0.2,
+                best_of=5
+            )
 
-        detected_language = result["language"]
+            transcript_text = result["text"]
 
-        # -----------------------------------
-        # DISPLAY DETECTED LANGUAGE
-        # -----------------------------------
+            detected_language = result["language"]
 
-        st.subheader("🌐 Detected Language")
+            # -----------------------------
+            # DETECTED LANGUAGE
+            # -----------------------------
 
-        st.write(detected_language.upper())
+            st.subheader("🌐 Detected Language")
 
-        # -----------------------------------
-        # SPEAKER FORMATTING
-        # -----------------------------------
+            st.write(detected_language.upper())
 
-        segments = result["segments"]
+            # -----------------------------
+            # SPEAKER FORMATTING
+            # -----------------------------
 
-        formatted_transcript = ""
+            segments = result["segments"]
 
-        speaker = 1
+            formatted_transcript = ""
 
-        for segment in segments:
+            speaker = 1
 
-            text = segment["text"].strip()
+            for segment in segments:
 
-            if text:
+                text = segment["text"].strip()
 
-                formatted_transcript += (
-                    f"Speaker {speaker}: {text}\n"
-                )
+                if text:
 
-                # Alternate speakers
-                speaker = 2 if speaker == 1 else 1
+                    formatted_transcript += (
+                        f"Speaker {speaker}: {text}\n"
+                    )
 
-        # -----------------------------------
-        # DISPLAY TRANSCRIPT
-        # -----------------------------------
+                    # Alternate speakers
+                    speaker = 2 if speaker == 1 else 1
 
-        st.subheader("📄 Transcript")
+            # -----------------------------
+            # TRANSCRIPT DISPLAY
+            # -----------------------------
 
-        st.text_area(
-            "Conversation Transcript",
-            formatted_transcript,
-            height=400
-        )
+            st.subheader("📄 Transcript")
 
-        # -----------------------------------
-        # GROQ FRAUD ANALYSIS
-        # -----------------------------------
+            st.text_area(
+                "Conversation Transcript",
+                formatted_transcript,
+                height=400
+            )
 
-        prompt = f"""
+            # -----------------------------
+            # AI FRAUD ANALYSIS
+            # -----------------------------
+
+            prompt = f"""
 You are an AI fraud detection expert.
 
 Analyze this Hindi-English phone conversation carefully.
 
 Tasks:
+
 1. Detect whether the call is:
    - Fraud / Scam
    - Spam
@@ -166,85 +188,85 @@ Conversation:
 {formatted_transcript}
 """
 
-        response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ]
-        )
+            response = client.chat.completions.create(
+                model="llama-3.1-8b-instant",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
+            )
 
-        ai_analysis = response.choices[0].message.content
+            ai_analysis = response.choices[0].message.content
 
-        # -----------------------------------
-        # DISPLAY AI ANALYSIS
-        # -----------------------------------
+            # -----------------------------
+            # DISPLAY AI ANALYSIS
+            # -----------------------------
 
-        st.subheader("📊 AI Fraud Analysis")
+            st.subheader("📊 AI Fraud Analysis")
 
-        st.write(ai_analysis)
+            st.write(ai_analysis)
 
-        # -----------------------------------
-        # FRAUD ALERT
-        # -----------------------------------
+            # -----------------------------
+            # FRAUD DETECTION
+            # -----------------------------
 
-        if (
-            "fraud" in ai_analysis.lower()
-            or "scam" in ai_analysis.lower()
-            or "spam" in ai_analysis.lower()
-        ):
+            if (
+                "fraud" in ai_analysis.lower()
+                or "scam" in ai_analysis.lower()
+                or "spam" in ai_analysis.lower()
+            ):
 
-            st.error("⚠ Potential Fraud / Scam Call Detected")
+                st.error("⚠ Potential Fraud / Scam Call Detected")
 
-            risk_score = 85
+                risk_score = 85
 
-        else:
+            else:
 
-            st.success("✅ Genuine Conversation Detected")
+                st.success("✅ Genuine Conversation Detected")
 
-            risk_score = 20
+                risk_score = 20
 
-        # -----------------------------------
-        # RISK METER
-        # -----------------------------------
+            # -----------------------------
+            # RISK METER
+            # -----------------------------
 
-        st.subheader("🚨 Risk Meter")
+            st.subheader("🚨 Risk Meter")
 
-        st.progress(risk_score)
+            st.progress(risk_score)
 
-        st.write(f"Risk Score: {risk_score}/100")
+            st.write(f"Risk Score: {risk_score}/100")
 
-        # -----------------------------------
-        # EMOTION DETECTION
-        # -----------------------------------
+            # -----------------------------
+            # EMOTION DETECTION
+            # -----------------------------
 
-        emotion_result = emotion_classifier(
-            transcript_text[:1000]
-        )
+            emotion_result = emotion_classifier(
+                transcript_text[:1000]
+            )
 
-        emotion = emotion_result[0]["label"]
+            emotion = emotion_result[0]["label"]
 
-        confidence = emotion_result[0]["score"]
+            confidence = emotion_result[0]["score"]
 
-        # -----------------------------------
-        # DISPLAY EMOTION
-        # -----------------------------------
+            # -----------------------------
+            # DISPLAY EMOTION
+            # -----------------------------
 
-        st.subheader("😊 Emotion Detection")
+            st.subheader("😊 Emotion Detection")
 
-        st.write(f"Emotion: {emotion}")
+            st.write(f"Emotion: {emotion}")
 
-        st.write(
-            f"Confidence: {round(confidence, 2)}"
-        )
+            st.write(
+                f"Confidence: {round(confidence, 2)}"
+            )
 
-        # -----------------------------------
-        # DOWNLOAD REPORT
-        # -----------------------------------
+            # -----------------------------
+            # DOWNLOAD REPORT
+            # -----------------------------
 
-        report = f"""
+            report = f"""
 ========== DETECTED LANGUAGE ==========
 
 {detected_language}
@@ -268,9 +290,19 @@ Confidence: {round(confidence, 2)}
 {risk_score}/100
 """
 
-        st.download_button(
-            label="⬇ Download Full Report",
-            data=report,
-            file_name="call_analysis_report.txt",
-            mime="text/plain"
-        )
+            st.download_button(
+                label="⬇ Download Full Report",
+                data=report,
+                file_name="call_analysis_report.txt",
+                mime="text/plain"
+            )
+
+        except Exception as e:
+
+            st.error(f"Error: {str(e)}")
+
+        finally:
+
+            # CLEANUP TEMP FILE
+            if os.path.exists(temp_audio):
+                os.remove(temp_audio)
