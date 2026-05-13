@@ -20,9 +20,9 @@ st.title("📞 AI Fraud Call Detection System")
 # GROQ API
 # -----------------------------
 
-client = Groq(
-    api_key=st.secrets["ZimfPn7eN7ZZK6EnDHpNWGdyb3FY2N3IyJEljtkZMMf64ia9QPSc"]
-)
+api_key = st.secrets["GROQ_API_KEY"]
+
+client = Groq(api_key=api_key)
 
 # -----------------------------
 # LOAD MODELS
