@@ -1,12 +1,11 @@
 import streamlit as st
 import whisper
-import os
 from groq import Groq
 from transformers import pipeline
 
-# -----------------------------
+# -----------------------------------
 # PAGE CONFIG
-# -----------------------------
+# -----------------------------------
 
 st.set_page_config(
     page_title="AI Fraud Call Detector",
@@ -16,22 +15,23 @@ st.set_page_config(
 
 st.title("📞 AI Fraud Call Detection System")
 
-# -----------------------------
+# -----------------------------------
 # GROQ API
-# -----------------------------
+# -----------------------------------
 
 api_key = st.secrets["GROQ_API_KEY"]
 
 client = Groq(api_key=api_key)
 
-# -----------------------------
+# -----------------------------------
 # LOAD MODELS
-# -----------------------------
+# -----------------------------------
 
 @st.cache_resource
 def load_models():
 
-    whisper_model = whisper.load_model("base")
+    # Better Hindi + English support
+    whisper_model = whisper.load_model("medium")
 
     emotion_model = pipeline(
         "text-classification",
@@ -42,18 +42,18 @@ def load_models():
 
 model, emotion_classifier = load_models()
 
-# -----------------------------
+# -----------------------------------
 # FILE UPLOAD
-# -----------------------------
+# -----------------------------------
 
 uploaded_file = st.file_uploader(
-    "Upload Audio File",
+    "📂 Upload Audio File",
     type=["wav", "mp3", "m4a"]
 )
 
-# -----------------------------
+# -----------------------------------
 # PROCESS AUDIO
-# -----------------------------
+# -----------------------------------
 
 if uploaded_file is not None:
 
@@ -62,70 +62,112 @@ if uploaded_file is not None:
     with open(temp_audio, "wb") as f:
         f.write(uploaded_file.getbuffer())
 
-    st.success("Audio Uploaded Successfully!")
+    st.success("✅ Audio Uploaded Successfully!")
 
-    with st.spinner("Analyzing Call..."):
+    # Audio player
+    st.audio(uploaded_file)
 
-        # -----------------------------
+    with st.spinner("🔍 Analyzing Call..."):
+
+        # -----------------------------------
         # TRANSCRIPTION
-        # -----------------------------
+        # -----------------------------------
 
-        result = model.transcribe(temp_audio)
+        result = model.transcribe(
+            temp_audio,
+            language=None,
+            task="transcribe",
+            fp16=False,
+            temperature=0.2,
+            best_of=5
+        )
 
         transcript_text = result["text"]
 
-        # -----------------------------
-        # FAKE SPEAKER SPLITTING
-        # -----------------------------
+        detected_language = result["language"]
 
-        sentences = transcript_text.split(".")
+        # -----------------------------------
+        # DISPLAY DETECTED LANGUAGE
+        # -----------------------------------
+
+        st.subheader("🌐 Detected Language")
+
+        st.write(detected_language.upper())
+
+        # -----------------------------------
+        # SPEAKER FORMATTING
+        # -----------------------------------
+
+        segments = result["segments"]
 
         formatted_transcript = ""
 
         speaker = 1
 
-        for sentence in sentences:
+        for segment in segments:
 
-            sentence = sentence.strip()
+            text = segment["text"].strip()
 
-            if sentence:
+            if text:
 
-                formatted_transcript += f"Speaker {speaker}: {sentence}\n"
+                formatted_transcript += (
+                    f"Speaker {speaker}: {text}\n"
+                )
 
                 # Alternate speakers
                 speaker = 2 if speaker == 1 else 1
 
-        # -----------------------------
+        # -----------------------------------
         # DISPLAY TRANSCRIPT
-        # -----------------------------
+        # -----------------------------------
 
         st.subheader("📄 Transcript")
 
         st.text_area(
-            "Conversation",
+            "Conversation Transcript",
             formatted_transcript,
             height=400
         )
 
-        # -----------------------------
+        # -----------------------------------
         # GROQ FRAUD ANALYSIS
-        # -----------------------------
+        # -----------------------------------
 
         prompt = f"""
-        Analyze the following call transcript.
+You are an AI fraud detection expert.
 
-        Detect:
-        1. Is this call Fraud/Spam or Genuine?
-        2. Explain why.
-        3. Give a short summary.
-        4. Mention suspicious behavior if any.
+Analyze this Hindi-English phone conversation carefully.
 
-        Transcript:
-        {formatted_transcript}
-        """
+Tasks:
+1. Detect whether the call is:
+   - Fraud / Scam
+   - Spam
+   - Genuine
+
+2. Explain WHY.
+
+3. Detect scam indicators such as:
+   - OTP requests
+   - Bank fraud
+   - UPI scams
+   - Threats
+   - Urgency
+   - Prize scams
+   - Fake customer support
+   - Identity theft
+   - Financial manipulation
+
+4. Give:
+   - Fraud confidence score (0-100)
+   - Short summary
+   - Risk level (Low / Medium / High)
+
+Conversation:
+{formatted_transcript}
+"""
 
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="llama-3.1-8b-instant",
             messages=[
                 {
                     "role": "user",
@@ -136,35 +178,77 @@ if uploaded_file is not None:
 
         ai_analysis = response.choices[0].message.content
 
-        # -----------------------------
+        # -----------------------------------
+        # DISPLAY AI ANALYSIS
+        # -----------------------------------
+
+        st.subheader("📊 AI Fraud Analysis")
+
+        st.write(ai_analysis)
+
+        # -----------------------------------
+        # FRAUD ALERT
+        # -----------------------------------
+
+        if (
+            "fraud" in ai_analysis.lower()
+            or "scam" in ai_analysis.lower()
+            or "spam" in ai_analysis.lower()
+        ):
+
+            st.error("⚠ Potential Fraud / Scam Call Detected")
+
+            risk_score = 85
+
+        else:
+
+            st.success("✅ Genuine Conversation Detected")
+
+            risk_score = 20
+
+        # -----------------------------------
+        # RISK METER
+        # -----------------------------------
+
+        st.subheader("🚨 Risk Meter")
+
+        st.progress(risk_score)
+
+        st.write(f"Risk Score: {risk_score}/100")
+
+        # -----------------------------------
         # EMOTION DETECTION
-        # -----------------------------
+        # -----------------------------------
 
         emotion_result = emotion_classifier(
             transcript_text[:1000]
         )
 
         emotion = emotion_result[0]["label"]
+
         confidence = emotion_result[0]["score"]
 
-        # -----------------------------
-        # SHOW RESULTS
-        # -----------------------------
-
-        st.subheader("📊 Fraud Analysis")
-
-        st.write(ai_analysis)
+        # -----------------------------------
+        # DISPLAY EMOTION
+        # -----------------------------------
 
         st.subheader("😊 Emotion Detection")
 
         st.write(f"Emotion: {emotion}")
-        st.write(f"Confidence: {round(confidence, 2)}")
 
-        # -----------------------------
+        st.write(
+            f"Confidence: {round(confidence, 2)}"
+        )
+
+        # -----------------------------------
         # DOWNLOAD REPORT
-        # -----------------------------
+        # -----------------------------------
 
         report = f"""
+========== DETECTED LANGUAGE ==========
+
+{detected_language}
+
 ========== TRANSCRIPT ==========
 
 {formatted_transcript}
@@ -173,16 +257,20 @@ if uploaded_file is not None:
 
 {ai_analysis}
 
-========== EMOTION ==========
+========== EMOTION DETECTION ==========
 
 Emotion: {emotion}
 
 Confidence: {round(confidence, 2)}
+
+========== RISK SCORE ==========
+
+{risk_score}/100
 """
 
         st.download_button(
-            label="⬇ Download Report",
+            label="⬇ Download Full Report",
             data=report,
-            file_name="call_report.txt",
+            file_name="call_analysis_report.txt",
             mime="text/plain"
         )
