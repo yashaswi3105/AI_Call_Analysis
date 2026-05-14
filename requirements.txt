@@ -5,3 +5,4 @@ transformers
 groq
 ffmpeg-python
 sentencepiece
+deepgram-sdk
