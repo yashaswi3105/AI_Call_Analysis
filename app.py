@@ -4,9 +4,11 @@ import os
 
 from groq import Groq
 
-from deepgram import DeepgramClient
-from deepgram import PrerecordedOptions
-from deepgram import FileSource
+from deepgram import (
+    DeepgramClient,
+    PrerecordedOptions,
+    FileSource,
+)
 
 # -----------------------------
 # PAGE CONFIG
@@ -53,7 +55,7 @@ if uploaded_file is not None:
 
     st.audio(uploaded_file)
 
-    # Save temporary audio
+    # Save temp audio file
     with tempfile.NamedTemporaryFile(
         delete=False,
         suffix=".wav"
@@ -86,6 +88,7 @@ if uploaded_file is not None:
                 smart_format=True,
                 diarize=True,
                 detect_language=True,
+                punctuate=True,
             )
 
             response = (
@@ -107,7 +110,7 @@ if uploaded_file is not None:
             words = transcript_data.words
 
         # -----------------------------
-        # LANGUAGE DETECTION
+        # DETECTED LANGUAGE
         # -----------------------------
 
         detected_language = "Unknown"
@@ -125,7 +128,7 @@ if uploaded_file is not None:
         st.write(detected_language.upper())
 
         # -----------------------------
-        # REAL SPEAKER DETECTION
+        # REAL SPEAKER DIARIZATION
         # -----------------------------
 
         formatted_transcript = ""
@@ -134,12 +137,13 @@ if uploaded_file is not None:
 
         for word in words:
 
-            speaker = word.get("speaker", 0)
+            # FIXED FOR DEEPGRAM V3
+            speaker = word.speaker
 
-            text = word.get(
-                "punctuated_word",
-                word["word"]
-            )
+            try:
+                text = word.punctuated_word
+            except:
+                text = word.word
 
             if speaker != current_speaker:
 
@@ -152,7 +156,7 @@ if uploaded_file is not None:
             formatted_transcript += text + " "
 
         # -----------------------------
-        # TRANSCRIPT DISPLAY
+        # SHOW TRANSCRIPT
         # -----------------------------
 
         st.subheader("📄 Transcript")
@@ -160,7 +164,7 @@ if uploaded_file is not None:
         st.text_area(
             "Conversation Transcript",
             formatted_transcript,
-            height=400
+            height=450
         )
 
         # -----------------------------
@@ -233,21 +237,35 @@ Conversation:
 
         analysis_lower = ai_analysis.lower()
 
-        if (
-            "fraud" in analysis_lower
-            or "scam" in analysis_lower
-            or "spam" in analysis_lower
-        ):
+        fraud_keywords = [
+            "fraud",
+            "scam",
+            "spam",
+            "otp",
+            "bank fraud",
+            "upi scam",
+            "fake"
+        ]
 
-            risk_score = 85
+        risk_score = 20
+
+        for keyword in fraud_keywords:
+
+            if keyword in analysis_lower:
+                risk_score = 85
+                break
+
+        # -----------------------------
+        # SHOW RISK RESULT
+        # -----------------------------
+
+        if risk_score >= 80:
 
             st.error(
                 "⚠ Potential Fraud / Scam Call Detected"
             )
 
         else:
-
-            risk_score = 20
 
             st.success(
                 "✅ Genuine Conversation Detected"
@@ -296,7 +314,7 @@ Conversation:
         )
 
         # -----------------------------
-        # REPORT DOWNLOAD
+        # DOWNLOAD REPORT
         # -----------------------------
 
         report = f"""
