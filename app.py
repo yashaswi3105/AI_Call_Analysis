@@ -4,6 +4,12 @@ import os
 
 from groq import Groq
 
+from deepgram import (
+    DeepgramClient,
+    PrerecordedOptions,
+    FileSource,
+)
+
 # -----------------------------
 # PAGE CONFIG
 # -----------------------------
@@ -21,11 +27,15 @@ st.write(
 )
 
 # -----------------------------
-# GROQ API
+# API CLIENTS
 # -----------------------------
 
-client = Groq(
+groq_client = Groq(
     api_key=st.secrets["GROQ_API_KEY"]
+)
+
+deepgram = DeepgramClient(
+    st.secrets["DEEPGRAM_API_KEY"]
 )
 
 # -----------------------------
@@ -59,30 +69,55 @@ if uploaded_file is not None:
 
     try:
 
+        # -----------------------------
+        # TRANSCRIPTION + DIARIZATION
+        # -----------------------------
+
         with st.spinner("🔍 Transcribing Audio..."):
 
-            # -----------------------------
-            # AUDIO TRANSCRIPTION USING GROQ
-            # -----------------------------
+            with open(temp_audio, "rb") as file:
 
-            with open(temp_audio, "rb") as audio_file:
+                buffer_data = file.read()
 
-                transcription = client.audio.transcriptions.create(
-                    file=audio_file,
-                    model="whisper-large-v3",
-                    response_format="verbose_json"
+            payload: FileSource = {
+                "buffer": buffer_data,
+            }
+
+            options = PrerecordedOptions(
+                model="nova-2",
+                smart_format=True,
+                diarize=True,
+                detect_language=True,
+            )
+
+            response = (
+                deepgram.listen.prerecorded
+                .v("1")
+                .transcribe_file(
+                    payload,
+                    options
                 )
+            )
 
-            transcript_text = transcription.text
+            transcript_data = (
+                response["results"]
+                ["channels"][0]
+                ["alternatives"][0]
+            )
+
+            transcript_text = (
+                transcript_data["transcript"]
+            )
+
+            words = transcript_data["words"]
 
         # -----------------------------
         # LANGUAGE DETECTION
         # -----------------------------
 
-        detected_language = getattr(
-            transcription,
-            "language",
-            "unknown"
+        detected_language = (
+            response["results"]
+            .get("languages", ["unknown"])[0]
         )
 
         st.subheader("🌐 Detected Language")
@@ -90,29 +125,34 @@ if uploaded_file is not None:
         st.write(detected_language.upper())
 
         # -----------------------------
-        # SPEAKER FORMATTING
+        # REAL SPEAKER DETECTION
         # -----------------------------
-
-        sentences = transcript_text.split(".")
 
         formatted_transcript = ""
 
-        speaker = 1
+        current_speaker = None
 
-        for sentence in sentences:
+        for word in words:
 
-            sentence = sentence.strip()
+            speaker = word.get("speaker", 0)
 
-            if sentence:
+            text = word.get(
+                "punctuated_word",
+                word["word"]
+            )
+
+            if speaker != current_speaker:
 
                 formatted_transcript += (
-                    f"Speaker {speaker}: {sentence}\n"
+                    f"\n\nSpeaker {speaker + 1}: "
                 )
 
-                speaker = 2 if speaker == 1 else 1
+                current_speaker = speaker
+
+            formatted_transcript += text + " "
 
         # -----------------------------
-        # TRANSCRIPT
+        # TRANSCRIPT DISPLAY
         # -----------------------------
 
         st.subheader("📄 Transcript")
@@ -120,7 +160,7 @@ if uploaded_file is not None:
         st.text_area(
             "Conversation Transcript",
             formatted_transcript,
-            height=350
+            height=400
         )
 
         # -----------------------------
@@ -132,47 +172,55 @@ if uploaded_file is not None:
             prompt = f"""
 You are an advanced fraud detection AI.
 
-Analyze this Hindi-English phone conversation.
+Analyze this Hindi-English phone conversation carefully.
 
-Detect:
-1. Fraud / Scam / Genuine
-2. Scam indicators
-3. Fraud confidence score
-4. Risk level
-5. Short summary
+Tasks:
+1. Detect whether the call is:
+   - Fraud / Scam
+   - Spam
+   - Genuine
 
-Look for:
-- OTP scams
-- UPI fraud
-- Banking fraud
-- Fake customer care
-- Threats
-- Urgency
-- Money requests
-- Prize scams
-- Identity theft
+2. Explain WHY.
+
+3. Detect scam indicators such as:
+   - OTP requests
+   - Bank fraud
+   - UPI scams
+   - Threats
+   - Urgency
+   - Prize scams
+   - Fake customer support
+   - Identity theft
+   - Financial manipulation
+
+4. Give:
+   - Fraud confidence score (0-100)
+   - Short summary
+   - Risk level (Low / Medium / High)
 
 Conversation:
 {formatted_transcript}
 """
 
-            response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ]
+            response_ai = (
+                groq_client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ]
+                )
             )
 
             ai_analysis = (
-                response.choices[0]
+                response_ai.choices[0]
                 .message.content
             )
 
         # -----------------------------
-        # SHOW ANALYSIS
+        # DISPLAY ANALYSIS
         # -----------------------------
 
         st.subheader("📊 AI Fraud Analysis")
@@ -206,14 +254,16 @@ Conversation:
             )
 
         # -----------------------------
-        # RISK BAR
+        # RISK METER
         # -----------------------------
 
         st.subheader("🚨 Risk Meter")
 
         st.progress(risk_score)
 
-        st.write(f"Risk Score: {risk_score}/100")
+        st.write(
+            f"Risk Score: {risk_score}/100"
+        )
 
         # -----------------------------
         # SIMPLE EMOTION DETECTION
@@ -241,7 +291,9 @@ Conversation:
 
         st.subheader("😊 Emotion Detection")
 
-        st.write(f"Detected Emotion: {emotion}")
+        st.write(
+            f"Detected Emotion: {emotion}"
+        )
 
         # -----------------------------
         # REPORT DOWNLOAD
