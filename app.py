@@ -4,11 +4,9 @@ import os
 
 from groq import Groq
 
-from deepgram import (
-    DeepgramClient,
-    PrerecordedOptions,
-    FileSource,
-)
+from deepgram import DeepgramClient
+from deepgram import PrerecordedOptions
+from deepgram import FileSource
 
 # -----------------------------
 # PAGE CONFIG
