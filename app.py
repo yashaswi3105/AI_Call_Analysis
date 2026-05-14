@@ -98,25 +98,27 @@ if uploaded_file is not None:
             )
 
             transcript_data = (
-                response["results"]
-                ["channels"][0]
-                ["alternatives"][0]
+                response.results.channels[0]
+                .alternatives[0]
             )
 
-            transcript_text = (
-                transcript_data["transcript"]
-            )
+            transcript_text = transcript_data.transcript
 
-            words = transcript_data["words"]
+            words = transcript_data.words
 
         # -----------------------------
         # LANGUAGE DETECTION
         # -----------------------------
 
-        detected_language = (
-            response["results"]
-            .get("languages", ["unknown"])[0]
-        )
+        detected_language = "Unknown"
+
+        try:
+            detected_language = (
+                response.results.channels[0]
+                .detected_language
+            )
+        except:
+            pass
 
         st.subheader("🌐 Detected Language")
 
