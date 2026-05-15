@@ -200,14 +200,42 @@ def transcribe_audio(audio_path):
 
         formatted_transcript += text + " "
 
+    # =====================================================
+    # LANGUAGE DETECTION FIX
+    # =====================================================
+
     detected_language = "Unknown"
 
     try:
-        detected_language = (
-            response.results.languages[0]
+
+        language_code = (
+            response.results.channels[0]
+            .detected_language
         )
+
+        language_map = {
+            "hi": "Hindi",
+            "en": "English",
+            "ta": "Tamil",
+            "bn": "Bengali",
+            "te": "Telugu",
+            "ml": "Malayalam",
+            "kn": "Kannada",
+            "mr": "Marathi",
+            "gu": "Gujarati",
+            "pa": "Punjabi"
+        }
+
+        detected_language = (
+            language_map.get(
+                language_code,
+                language_code.upper()
+            )
+        )
+
     except:
-        pass
+
+        detected_language = "Unknown"
 
     speakers_count = len(
         set(
@@ -438,7 +466,7 @@ def show_dashboard(
     with col1:
         st.metric(
             "🌐 Language",
-            str(language).upper()
+            str(language)
         )
 
     with col2:
