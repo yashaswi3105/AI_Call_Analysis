@@ -1,8 +1,6 @@
 import streamlit as st
 import tempfile
 import os
-import sounddevice as sd
-import soundfile as sf
 import librosa
 import librosa.display
 import matplotlib.pyplot as plt
@@ -48,21 +46,17 @@ h1, h2, h3, h4, h5 {
 }
 
 div[data-testid="metric-container"] {
-    background: rgba(17, 24, 39, 0.85);
+    background: rgba(17, 24, 39, 0.9);
     border: 1px solid #374151;
     border-radius: 18px;
     padding: 20px;
-    box-shadow: 0px 0px 15px rgba(0,0,0,0.5);
+    box-shadow: 0px 0px 15px rgba(0,0,0,0.4);
 }
 
 .stTextArea textarea {
     background-color: #111827;
     color: white;
     border-radius: 12px;
-}
-
-.stProgress > div > div {
-    background-color: red;
 }
 
 .block-container {
@@ -79,19 +73,19 @@ div[data-testid="metric-container"] {
 st.title("🛡 Sentinel AI")
 
 st.subheader(
-    "AI-Powered Real-Time Voice Fraud Detection Platform"
+    "AI-Powered Voice Fraud Detection Platform"
 )
 
 st.write("""
-Advanced cybersecurity voice intelligence system capable of:
+Advanced AI cybersecurity system for detecting:
 
-- Real-Time Scam Detection
-- AI Behavioral Analysis
-- Emotional Manipulation Detection
-- Voice Stress Detection
+- Fraud Calls
+- Scam Attempts
+- Emotional Manipulation
+- Social Engineering
 - Threat Intelligence
-- Social Engineering Detection
-- Fraud Risk Scoring
+- Voice Stress
+- Financial Deception
 """)
 
 # =========================================================
@@ -100,13 +94,7 @@ Advanced cybersecurity voice intelligence system capable of:
 
 st.sidebar.title("⚙ Sentinel AI")
 
-mode = st.sidebar.radio(
-    "Select Analysis Mode",
-    [
-        "Upload Recording",
-        "Real-Time Analysis"
-    ]
-)
+st.sidebar.success("🟢 System Active")
 
 st.sidebar.markdown("---")
 
@@ -116,10 +104,6 @@ Supported Audio Formats:
 - MP3
 - M4A
 """)
-
-st.sidebar.markdown("---")
-
-st.sidebar.success("🟢 Sentinel AI Active")
 
 # =========================================================
 # API CLIENTS
@@ -247,23 +231,21 @@ an advanced AI cybersecurity voice intelligence system.
 
 Analyze this phone conversation naturally.
 
-Do NOT rely on keyword matching.
+Do NOT rely only on keywords.
 
 Understand:
 - fraud intent
-- emotional manipulation
+- manipulation tactics
+- scam behavior
 - social engineering
 - trust exploitation
-- scam likelihood
-- impersonation
-- fear tactics
 - urgency pressure
-- deceptive communication
-- psychological manipulation
+- emotional deception
+- impersonation attempts
 
 Tasks:
 
-1. Determine whether the conversation is:
+1. Determine whether the call is:
    - Fraudulent
    - Suspicious
    - Genuine
@@ -271,17 +253,16 @@ Tasks:
 2. Explain WHY.
 
 3. Analyze:
-   - behavioral patterns
+   - caller behavior
    - emotional pressure
-   - scam tactics
-   - manipulation indicators
+   - scam indicators
+   - manipulation techniques
    - threat likelihood
 
 4. Provide:
    - Fraud Confidence Score
    - Threat Level
    - Emotional Tone
-   - Stress Level
    - AI Summary
 
 Transcript:
@@ -353,7 +334,7 @@ def calculate_risk(ai_analysis):
     return risk_score, risk_level
 
 # =========================================================
-# EMOTION ENGINE
+# EMOTION DETECTION
 # =========================================================
 
 def detect_emotion(ai_analysis):
@@ -383,7 +364,7 @@ def detect_emotion(ai_analysis):
     return emotion
 
 # =========================================================
-# VOICE STRESS ANALYSIS
+# STRESS ANALYSIS
 # =========================================================
 
 def voice_stress_analysis(audio_path):
@@ -477,7 +458,7 @@ def show_dashboard(
 
     with col1:
         st.metric(
-            "🧠 Stress Level",
+            "🧠 Voice Stress",
             stress_level
         )
 
@@ -522,7 +503,7 @@ def show_dashboard(
     st.subheader("⏱ AI Activity Timeline")
 
     timeline_events = [
-        "🎙 Voice captured",
+        "🎙 Audio captured",
         "🧠 Speech transcribed",
         "🔍 Behavioral analysis completed",
         "📊 Threat intelligence generated",
@@ -554,8 +535,7 @@ def show_dashboard(
     st.subheader("📋 AI Executive Summary")
 
     summary_prompt = f"""
-Summarize this AI fraud analysis
-in 5 concise bullet points.
+Summarize this analysis in 5 concise bullet points.
 
 Analysis:
 {ai_analysis}
@@ -645,145 +625,70 @@ AI SUMMARY:
     )
 
 # =========================================================
-# REAL-TIME ANALYSIS
+# FILE UPLOAD
 # =========================================================
 
-if mode == "Real-Time Analysis":
+uploaded_file = st.file_uploader(
+    "📂 Upload Call Recording",
+    type=["wav", "mp3", "m4a"]
+)
 
-    st.subheader("🎙 Real-Time Voice Analysis")
+# =========================================================
+# MAIN ANALYSIS
+# =========================================================
 
-    duration = st.slider(
-        "Recording Duration (Seconds)",
-        5,
-        60,
-        10
+if uploaded_file is not None:
+
+    st.audio(uploaded_file)
+
+    with tempfile.NamedTemporaryFile(
+        delete=False,
+        suffix=".wav"
+    ) as tmp_file:
+
+        tmp_file.write(
+            uploaded_file.read()
+        )
+
+        temp_audio = tmp_file.name
+
+    st.success(
+        "✅ Audio Uploaded Successfully"
     )
 
-    if st.button("🎤 Start Live Recording"):
+    try:
 
-        st.info(
-            "🎙 Listening to microphone..."
-        )
+        with st.spinner(
+            "🧠 Sentinel AI analyzing behavioral patterns..."
+        ):
 
-        sample_rate = 16000
-
-        recording = sd.rec(
-            int(duration * sample_rate),
-            samplerate=sample_rate,
-            channels=1
-        )
-
-        sd.wait()
-
-        st.success(
-            "✅ Recording Completed"
-        )
-
-        temp_audio = "live_recording.wav"
-
-        sf.write(
-            temp_audio,
-            recording,
-            sample_rate
-        )
-
-        st.audio(temp_audio)
-
-        try:
-
-            with st.spinner(
-                "🧠 Sentinel AI analyzing behavioral patterns..."
-            ):
-
-                (
-                    transcript,
-                    language,
-                    speakers
-                ) = transcribe_audio(
-                    temp_audio
-                )
-
-                ai_analysis = analyze_call(
-                    transcript
-                )
-
-            show_dashboard(
+            (
                 transcript,
                 language,
-                speakers,
-                ai_analysis,
+                speakers
+            ) = transcribe_audio(
                 temp_audio
             )
 
-        except Exception as e:
-
-            st.error(
-                f"❌ Error: {str(e)}"
+            ai_analysis = analyze_call(
+                transcript
             )
 
-# =========================================================
-# FILE UPLOAD ANALYSIS
-# =========================================================
-
-if mode == "Upload Recording":
-
-    uploaded_file = st.file_uploader(
-        "📂 Upload Call Recording",
-        type=["wav", "mp3", "m4a"]
-    )
-
-    if uploaded_file is not None:
-
-        st.audio(uploaded_file)
-
-        with tempfile.NamedTemporaryFile(
-            delete=False,
-            suffix=".wav"
-        ) as tmp_file:
-
-            tmp_file.write(
-                uploaded_file.read()
-            )
-
-            temp_audio = tmp_file.name
-
-        st.success(
-            "✅ Audio Uploaded Successfully"
+        show_dashboard(
+            transcript,
+            language,
+            speakers,
+            ai_analysis,
+            temp_audio
         )
 
-        try:
+    except Exception as e:
 
-            with st.spinner(
-                "🧠 Sentinel AI analyzing behavioral patterns..."
-            ):
+        st.error(
+            f"❌ Error: {str(e)}"
+        )
 
-                (
-                    transcript,
-                    language,
-                    speakers
-                ) = transcribe_audio(
-                    temp_audio
-                )
+    finally:
 
-                ai_analysis = analyze_call(
-                    transcript
-                )
-
-            show_dashboard(
-                transcript,
-                language,
-                speakers,
-                ai_analysis,
-                temp_audio
-            )
-
-        except Exception as e:
-
-            st.error(
-                f"❌ Error: {str(e)}"
-            )
-
-        finally:
-
-            if os.path.exists(temp_audio):
-                os.remove(temp_audio)
+        if os.path.exists(temp_audio):
+            os.remove(temp_audio)
