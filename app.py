@@ -1,6 +1,7 @@
 import streamlit as st
 import tempfile
 import os
+import re
 import librosa
 import librosa.display
 import matplotlib.pyplot as plt
@@ -201,7 +202,7 @@ def transcribe_audio(audio_path):
         formatted_transcript += text + " "
 
     # =====================================================
-    # LANGUAGE DETECTION FIX
+    # LANGUAGE DETECTION
     # =====================================================
 
     detected_language = "Unknown"
@@ -260,41 +261,40 @@ def analyze_call(transcript):
 You are Sentinel AI,
 an advanced AI cybersecurity voice intelligence system.
 
-Analyze this phone conversation naturally.
+Analyze the following phone call carefully.
 
-Do NOT rely only on keywords.
-
-Understand:
-- fraud intent
-- manipulation tactics
-- scam behavior
+IMPORTANT:
+Do NOT classify a call as fraud unless there is STRONG evidence of:
+- scam attempts
+- impersonation
+- financial manipulation
+- OTP/UPI theft
 - social engineering
-- trust exploitation
-- urgency pressure
-- emotional deception
-- impersonation attempts
+- banking fraud
+- suspicious deception
 
-Tasks:
+Normal emotional conversations,
+arguments,
+anger,
+urgency,
+or stress
+DO NOT automatically mean fraud.
 
-1. Determine whether the call is:
-   - Fraudulent
-   - Suspicious
-   - Genuine
+Return your answer STRICTLY in this format:
 
-2. Explain WHY.
+CALL_TYPE: Genuine / Suspicious / Fraudulent
 
-3. Analyze:
-   - caller behavior
-   - emotional pressure
-   - scam indicators
-   - manipulation techniques
-   - threat likelihood
+FRAUD_CONFIDENCE: number between 0-100
 
-4. Provide:
-   - Fraud Confidence Score
-   - Threat Level
-   - Emotional Tone
-   - AI Summary
+THREAT_LEVEL: Low / Medium / High
+
+EMOTIONAL_TONE: Neutral / Positive / Aggressive / Fearful
+
+REASON:
+Short explanation.
+
+SUMMARY:
+Short summary.
 
 Transcript:
 {transcript}
@@ -325,42 +325,54 @@ def calculate_risk(ai_analysis):
 
     analysis_lower = ai_analysis.lower()
 
-    risk_score = 10
+    risk_score = 15
+    risk_level = "LOW"
 
-    if (
-        "fraudulent" in analysis_lower
-        or "high risk" in analysis_lower
-    ):
-        risk_score += 60
+    # =====================================================
+    # STRICT AI DECISION
+    # =====================================================
 
-    if (
-        "scam" in analysis_lower
-        or "fraud" in analysis_lower
-    ):
-        risk_score += 20
+    if "call_type: fraudulent" in analysis_lower:
 
-    if (
-        "manipulation" in analysis_lower
-        or "social engineering" in analysis_lower
-    ):
-        risk_score += 10
-
-    if (
-        "fear" in analysis_lower
-        or "pressure" in analysis_lower
-    ):
-        risk_score += 10
-
-    risk_score = min(risk_score, 100)
-
-    if risk_score >= 75:
+        risk_score = 85
         risk_level = "HIGH"
 
-    elif risk_score >= 40:
+    elif "call_type: suspicious" in analysis_lower:
+
+        risk_score = 50
         risk_level = "MEDIUM"
 
-    else:
+    elif "call_type: genuine" in analysis_lower:
+
+        risk_score = 15
         risk_level = "LOW"
+
+    # =====================================================
+    # EXTRACT AI CONFIDENCE
+    # =====================================================
+
+    try:
+
+        match = re.search(
+            r"fraud_confidence:\s*(\d+)",
+            analysis_lower
+        )
+
+        if match:
+
+            risk_score = int(match.group(1))
+
+            if risk_score >= 75:
+                risk_level = "HIGH"
+
+            elif risk_score >= 40:
+                risk_level = "MEDIUM"
+
+            else:
+                risk_level = "LOW"
+
+    except:
+        pass
 
     return risk_score, risk_level
 
@@ -374,22 +386,13 @@ def detect_emotion(ai_analysis):
 
     emotion = "Neutral"
 
-    if (
-        "fear" in analysis_lower
-        or "panic" in analysis_lower
-    ):
-        emotion = "Fear"
+    if "fearful" in analysis_lower:
+        emotion = "Fearful"
 
-    elif (
-        "angry" in analysis_lower
-        or "threat" in analysis_lower
-    ):
+    elif "aggressive" in analysis_lower:
         emotion = "Aggressive"
 
-    elif (
-        "positive" in analysis_lower
-        or "friendly" in analysis_lower
-    ):
+    elif "positive" in analysis_lower:
         emotion = "Positive"
 
     return emotion
@@ -456,7 +459,7 @@ def show_dashboard(
     else:
 
         st.success(
-            "✅ CALL APPEARS SAFE"
+            "✅ CALL APPEARS GENUINE"
         )
 
     # =====================================================
