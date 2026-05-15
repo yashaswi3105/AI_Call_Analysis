@@ -1,3 +1,11 @@
 streamlit
 groq
 deepgram-sdk==3.5.0
+librosa
+matplotlib
+plotly
+numpy
+soundfile
+scipy
+audioread
+numba
