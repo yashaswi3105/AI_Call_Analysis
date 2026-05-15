@@ -142,13 +142,12 @@ def show_waveform(audio_path):
     st.pyplot(fig)
 
 # =========================================================
-# TRANSCRIPTION
+# TRANSCRIBE AUDIO
 # =========================================================
 
 def transcribe_audio(audio_path):
 
     with open(audio_path, "rb") as audio:
-
         buffer_data = audio.read()
 
     payload: FileSource = {
@@ -171,12 +170,11 @@ def transcribe_audio(audio_path):
     )
 
     transcript_data = (
-        response["results"]
-        ["channels"][0]
-        ["alternatives"][0]
+        response.results.channels[0]
+        .alternatives[0]
     )
 
-    words = transcript_data["words"]
+    words = transcript_data.words
 
     formatted_transcript = ""
 
@@ -184,11 +182,12 @@ def transcribe_audio(audio_path):
 
     for word in words:
 
-        speaker = word.get("speaker", 0)
+        speaker = getattr(word, "speaker", 0)
 
-        text = word.get(
+        text = getattr(
+            word,
             "punctuated_word",
-            word["word"]
+            word.word
         )
 
         if speaker != current_speaker:
@@ -201,14 +200,18 @@ def transcribe_audio(audio_path):
 
         formatted_transcript += text + " "
 
-    detected_language = (
-        response["results"]
-        .get("languages", ["Unknown"])[0]
-    )
+    detected_language = "Unknown"
+
+    try:
+        detected_language = (
+            response.results.languages[0]
+        )
+    except:
+        pass
 
     speakers_count = len(
         set(
-            word.get("speaker", 0)
+            getattr(word, "speaker", 0)
             for word in words
         )
     )
@@ -364,14 +367,16 @@ def detect_emotion(ai_analysis):
     return emotion
 
 # =========================================================
-# STRESS ANALYSIS
+# VOICE STRESS ANALYSIS
 # =========================================================
 
 def voice_stress_analysis(audio_path):
 
     y, sr = librosa.load(audio_path)
 
-    energy = np.mean(librosa.feature.rms(y=y))
+    energy = np.mean(
+        librosa.feature.rms(y=y)
+    )
 
     if energy > 0.1:
         return "High Stress"
@@ -398,10 +403,12 @@ def show_dashboard(
         calculate_risk(ai_analysis)
     )
 
-    emotion = detect_emotion(ai_analysis)
+    emotion = detect_emotion(
+        ai_analysis
+    )
 
-    stress_level = voice_stress_analysis(
-        audio_path
+    stress_level = (
+        voice_stress_analysis(audio_path)
     )
 
     # =====================================================
@@ -431,7 +438,7 @@ def show_dashboard(
     with col1:
         st.metric(
             "🌐 Language",
-            language.upper()
+            str(language).upper()
         )
 
     with col2:
@@ -535,7 +542,8 @@ def show_dashboard(
     st.subheader("📋 AI Executive Summary")
 
     summary_prompt = f"""
-Summarize this analysis in 5 concise bullet points.
+Summarize this analysis
+in 5 concise bullet points.
 
 Analysis:
 {ai_analysis}
